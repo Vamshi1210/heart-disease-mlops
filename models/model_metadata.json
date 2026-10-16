@@ -1,0 +1,42 @@
+{
+  "model_version": "2026.10.16-1035",
+  "model_type": "logistic_regression",
+  "decision_threshold": 0.2285,
+  "features": [
+    "age",
+    "resting_bp",
+    "cholesterol",
+    "max_heart_rate",
+    "st_depression",
+    "num_major_vessels",
+    "sex",
+    "fasting_blood_sugar",
+    "exercise_angina",
+    "chest_pain_type",
+    "resting_ecg",
+    "st_slope",
+    "thalassemia"
+  ],
+  "best_params": {
+    "model__C": 1,
+    "model__class_weight": "balanced"
+  },
+  "cv_metrics": {
+    "cv_f2": 0.8336,
+    "cv_recall": 0.8281,
+    "cv_precision": 0.8697,
+    "cv_accuracy": 0.8594,
+    "cv_roc_auc": 0.9082,
+    "cv_f2_std": 0.0366
+  },
+  "test_metrics": {
+    "test_accuracy": 0.7869,
+    "test_precision": 0.6829,
+    "test_recall": 1.0,
+    "test_f2": 0.915,
+    "test_roc_auc": 0.9578
+  },
+  "data_version": "711ae4eb6c",
+  "mlflow_run_id": "2557f6c288e54ce5b293a011172b77d2",
+  "sklearn_version": "1.9.1"
+}

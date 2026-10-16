@@ -1,7 +1,9 @@
-pandas
-numpy
-scikit-learn
-matplotlib
-seaborn
-ucimlrepo
-ipykernel
+ipykernel==7.4.0
+joblib==1.6.0
+matplotlib==3.11.2
+mlflow==3.17.1
+numpy==2.5.4
+pandas==3.0.6
+scikit-learn==1.9.1
+seaborn==0.13.2
+ucimlrepo==0.0.7
