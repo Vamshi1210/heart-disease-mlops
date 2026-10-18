@@ -16,7 +16,7 @@ env:
 jobs:
   lint:
     name: 1. Lint (flake8)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -29,7 +29,7 @@ jobs:
   test:
     name: 2. Unit tests (pytest)
     needs: lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -43,7 +43,7 @@ jobs:
           pytest -v --junitxml=reports/junit.xml
       - name: Upload test report
         if: always()  # keep the report even when tests fail, to see why
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: test-report
           path: reports/junit.xml
@@ -51,7 +51,7 @@ jobs:
   train:
     name: 3. Train model (MLflow + quality gate)
     needs: test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-python@v6
@@ -75,12 +75,12 @@ jobs:
               print(f"| {k.removeprefix('test_')} | {v:.3f} |")
           EOF
       - name: Upload trained model
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: trained-model
           path: models/
       - name: Upload MLflow run and evaluation plot
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: mlflow-run
           path: |
@@ -91,11 +91,11 @@ jobs:
   docker:
     name: 4. Build & smoke-test container
     needs: train
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
       - name: Use the model trained in step 3
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v6
         with:
           name: trained-model
           path: models/
