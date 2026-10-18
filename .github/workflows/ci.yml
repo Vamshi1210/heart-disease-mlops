@@ -1,0 +1,116 @@
+# CI/CD pipeline: every push runs lint -> test -> train -> build & smoke-test the container.
+# Each job only starts if the one before it passed, so a broken step stops the pipeline.
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:  # adds a "Run workflow" button on the Actions tab
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: "3.14"
+
+jobs:
+  lint:
+    name: 1. Lint (flake8)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install flake8==7.4.1
+      - name: Check code style
+        run: flake8 src api test --show-source --statistics
+
+  test:
+    name: 2. Unit tests (pytest)
+    needs: lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Run tests
+        run: |
+          mkdir -p reports
+          pytest -v --junitxml=reports/junit.xml
+      - name: Upload test report
+        if: always()  # keep the report even when tests fail, to see why
+        uses: actions/upload-artifact@v5
+        with:
+          name: test-report
+          path: reports/junit.xml
+
+  train:
+    name: 3. Train model (MLflow + quality gate)
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Clean and validate data
+        run: python src/clean_data.py
+      - name: Train, track in MLflow, apply quality gate
+        run: python -m src.train
+      - name: Write metrics to the run summary
+        run: |
+          python - >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          import json
+          m = json.load(open("models/model_metadata.json"))
+          print(f"## Trained model `{m['model_version']}` ({m['model_type']})")
+          print(f"Decision threshold: **{m['decision_threshold']}** | data version: `{m['data_version']}`\n")
+          print("| Metric | Test set |\n|---|---|")
+          for k, v in m["test_metrics"].items():
+              print(f"| {k.removeprefix('test_')} | {v:.3f} |")
+          EOF
+      - name: Upload trained model
+        uses: actions/upload-artifact@v5
+        with:
+          name: trained-model
+          path: models/
+      - name: Upload MLflow run and evaluation plot
+        uses: actions/upload-artifact@v5
+        with:
+          name: mlflow-run
+          path: |
+            mlflow.db
+            mlruns/
+            report/figures/05_final_model_test.png
+
+  docker:
+    name: 4. Build & smoke-test container
+    needs: train
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Use the model trained in step 3
+        uses: actions/download-artifact@v5
+        with:
+          name: trained-model
+          path: models/
+      - name: Build image
+        run: docker build -t heart-disease-api:${{ github.sha }} .
+      - name: Run container and test /health and /predict
+        run: |
+          docker run -d --name heart-api -p 8000:8000 heart-disease-api:${{ github.sha }}
+          for i in $(seq 1 30); do curl -sf http://localhost:8000/health && break; sleep 2; done
+          echo
+          curl -sf http://localhost:8000/health
+          echo
+          curl -sf -X POST http://localhost:8000/predict \
+            -H "Content-Type: application/json" -d @api/sample_request.json
+          echo
+      - name: Container logs
+        if: always()
+        run: docker logs heart-api || true
