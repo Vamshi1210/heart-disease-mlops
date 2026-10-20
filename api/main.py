@@ -4,6 +4,7 @@ Heart disease risk API.
 Endpoints:
   GET  /health   is the service up and is the model loaded?
   POST /predict  one patient's data in (JSON) -> prediction + confidence out
+  GET  /metrics  monitoring numbers for Prometheus (requests, latency, predictions)
   GET  /docs     interactive documentation (built in by FastAPI)
 
 Run locally:  uvicorn api.main:app --reload --port 8000
@@ -18,7 +19,8 @@ from typing import Literal, Optional
 
 import joblib
 import pandas as pd
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
+from prometheus_client import CONTENT_TYPE_LATEST, Counter, Histogram, generate_latest
 from pydantic import BaseModel, ConfigDict, Field
 
 MODEL_DIR = Path(os.getenv("MODEL_DIR", Path(__file__).resolve().parent.parent / "models"))
@@ -26,6 +28,13 @@ MODEL_DIR = Path(os.getenv("MODEL_DIR", Path(__file__).resolve().parent.parent /
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("heart-api")
+
+# Monitoring: Prometheus reads these from GET /metrics every few seconds.
+REQUESTS = Counter("http_requests", "HTTP requests", ["method", "path", "status"])
+LATENCY = Histogram("http_request_duration_seconds", "Time to answer a request", ["path"])
+PREDICTIONS = Counter("predictions", "Predictions made", ["result"])
+RISK = Histogram("disease_probability", "Predicted probability of heart disease",
+                 buckets=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0])
 
 EXAMPLE_PATIENT = {
     "age": 63, "sex": 1, "chest_pain_type": 1, "resting_bp": 145, "cholesterol": 233,
@@ -83,12 +92,16 @@ app = FastAPI(title="Heart Disease Risk API", version="1.0.0", lifespan=lifespan
 
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Log every request: method, path, status code and how long it took."""
+    """Log and count every request: method, path, status code and how long it took."""
     start = time.perf_counter()
     response = await call_next(request)
-    ms = (time.perf_counter() - start) * 1000
+    seconds = time.perf_counter() - start
+    route = request.scope.get("route")
+    path = route.path if route else "unmatched"  # avoids one label per random URL
+    REQUESTS.labels(request.method, path, str(response.status_code)).inc()
+    LATENCY.labels(path).observe(seconds)
     logger.info("%s %s -> %d (%.1f ms)", request.method, request.url.path,
-                response.status_code, ms)
+                response.status_code, seconds * 1000)
     return response
 
 
@@ -97,6 +110,12 @@ def health(request: Request) -> dict:
     meta = request.app.state.metadata
     return {"status": "ok", "model_version": meta["model_version"],
             "model_type": meta["model_type"]}
+
+
+@app.get("/metrics")
+def metrics() -> Response:
+    """Expose the monitoring numbers in Prometheus' text format."""
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.post("/predict", response_model=PredictionResponse)
@@ -110,8 +129,10 @@ def predict(patient: Patient, request: Request) -> PredictionResponse:
     prediction = int(model.predict(row)[0])  # uses the tuned threshold
     confidence = probability if prediction == 1 else 1 - probability
 
-    # Log the outcome only, never the patient's health data.
+    # Log and count the outcome only, never the patient's health data.
     logger.info("prediction=%d probability=%.3f", prediction, probability)
+    PREDICTIONS.labels("disease" if prediction == 1 else "no_disease").inc()
+    RISK.observe(probability)
     return PredictionResponse(
         prediction=prediction,
         label="heart disease likely" if prediction == 1 else "heart disease unlikely",

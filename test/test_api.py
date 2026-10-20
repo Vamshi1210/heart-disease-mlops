@@ -54,3 +54,11 @@ def test_predict_rejects_bad_input(client, change):
 def test_predict_rejects_missing_required_field(client):
     patient = {k: v for k, v in SAMPLE.items() if k != "age"}
     assert client.post("/predict", json=patient).status_code == 422
+
+
+def test_metrics_count_requests_and_predictions(client):
+    client.post("/predict", json=SAMPLE)
+    body = client.get("/metrics").text
+    assert 'http_requests_total{method="POST",path="/predict",status="200"}' in body
+    assert "predictions_total" in body
+    assert "http_request_duration_seconds_bucket" in body
