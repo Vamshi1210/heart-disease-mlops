@@ -223,3 +223,5 @@ __marimo__/
 mlflow.db
 mlruns/
 mlartifacts/
+.venv-1/
+.venv-1/
