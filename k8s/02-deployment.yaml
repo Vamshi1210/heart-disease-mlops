@@ -1,0 +1,43 @@
+# Runs 2 copies (pods) of the API container. Kubernetes restarts any that crash.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: heart-api
+  namespace: mlops
+  labels:
+    app: heart-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: heart-api
+  template:
+    metadata:
+      labels:
+        app: heart-api
+    spec:
+      containers:
+        - name: api
+          image: heart-disease-api:1.1
+          imagePullPolicy: Never  # image is loaded into Minikube, not pulled from a registry
+          ports:
+            - containerPort: 8000
+          readinessProbe:  # send traffic only after the model has loaded
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:  # restart the pod if it stops answering
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi

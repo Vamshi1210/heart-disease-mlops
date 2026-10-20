@@ -1,0 +1,5 @@
+# A separate "room" in the cluster for this project's resources.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mlops

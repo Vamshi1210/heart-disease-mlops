@@ -1,0 +1,26 @@
+# Public entry point: a LoadBalancer spreads requests across the API pods.
+apiVersion: v1
+kind: Service
+metadata:
+  name: heart-api
+  namespace: mlops
+spec:
+  type: LoadBalancer
+  selector:
+    app: heart-api
+  ports:
+    - port: 80
+      targetPort: 8000
+---
+# Headless service: DNS returns every pod's address, so Prometheus scrapes each pod.
+apiVersion: v1
+kind: Service
+metadata:
+  name: heart-api-pods
+  namespace: mlops
+spec:
+  clusterIP: None
+  selector:
+    app: heart-api
+  ports:
+    - port: 8000

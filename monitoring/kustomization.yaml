@@ -1,0 +1,22 @@
+# "kubectl apply -k monitoring/" builds config files into ConfigMaps and applies everything.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mlops
+resources:
+  - prometheus-deploy.yaml
+  - grafana-deploy.yaml
+configMapGenerator:
+  - name: prometheus-config
+    files:
+      - prometheus.yml
+  - name: grafana-datasources
+    files:
+      - grafana-datasource.yaml
+  - name: grafana-dashboard-provider
+    files:
+      - grafana-dashboard-provider.yaml
+  - name: grafana-dashboards
+    files:
+      - heart-api-dashboard.json
+generatorOptions:
+  disableNameSuffixHash: true

@@ -1,0 +1,10 @@
+# Prometheus collects /metrics from every API pod every 5 seconds.
+global:
+  scrape_interval: 5s
+scrape_configs:
+  - job_name: heart-api
+    dns_sd_configs:
+      - names:
+          - heart-api-pods.mlops.svc.cluster.local
+        type: A
+        port: 8000
